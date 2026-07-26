@@ -43,3 +43,56 @@ https://maoyincc.github.io/Trapped/
 
 ## 即开即玩：
 https://maoyincc.github.io/Trapped/
+
+
+# Don't Get Trapped (憋死牛)
+
+A classic folk board game developed using HTML5, CSS3, and JavaScript—known as "Don't Get Trapped" (also called "Chuangjing"). It supports Player vs. Environment (PvE), local two-player battles, and zero-cost P2P online multiplayer powered by PeerJS.
+
+## Play Instantly:
+
+[https://maoyincc.github.io/Trapped/](https://maoyincc.github.io/Trapped/)
+
+## 🎮 Game Rules
+
+* **Board & Initial Layout**: The board consists of an outer square with diagonals, a bottom line, and a center point (total of 5 nodes). Red (P1) and Blue (P2) each own 2 pieces, starting at designated positions on the upper and lower sections of the square.
+* **Movement Rules**: Pieces can only move one step along the lines on the board to an adjacent empty node.
+* **Victory Condition**: If all of a player's pieces are blocked and unable to move (i.e., "trapped"), the opponent wins.
+
+## ✨ Key Features
+
+* **Multiple Game Modes**:
+* **PvE (Player vs. AI)**: Play solo against a computer opponent.
+* **PvP (Local Two-Player)**: Face off locally on the same screen.
+* **Online Multiplayer**: Real-time peer-to-peer online matching via PeerJS using a simple 4-digit room code.
+
+
+* **Flexible Turn Selection**: Easily switch whether Red or Blue goes first in single-player or online modes using the control panel, with real-time sync and automatic board reset upon change.
+* **Multi-Language Support**: Built-in one-click toggle between English and Chinese (`🌐 EN` / `🌐 中`).
+* **Immersive Sound Effects**: Pure front-end synthetic sound effects powered by the Web Audio API (placement sounds, selection cues, victory alerts) with a one-click mute option.
+* **Elegant Visual Design**: Wood-textured board, delicate piece shadows, and dynamic prompt animations.
+
+## 🚀 Quick Start
+
+This project is a pure front-end single-file application requiring no complex build environments.
+
+1. Clone or download the `index.html` file from this repository.
+2. Double-click the file or open it directly in any modern browser (Chrome, Firefox, Safari, Edge) to start playing.
+3. To experience the online multiplayer feature, ensure your device is connected to the internet (the project loads the PeerJS library via a public CDN).
+
+## 📂 Project Structure
+
+* **Single-File Architecture**: All HTML, CSS styles, and JavaScript game logic are encapsulated within a single `index.html` file:
+* **UI Layout & Styles**: Built with native CSS variables and Flexbox layout, fully responsive across multiple devices.
+* **Networking Module**: Implements peer-to-peer (P2P) signaling and data synchronization via `PeerJS`.
+* **Sound Module**: Native `AudioContext` synthesized sound effects, requiring no external audio asset files.
+
+
+
+## 📜 License
+
+This project is open-sourced under the MIT License, welcoming free distribution and modification.
+
+## Play Instantly:
+
+[https://maoyincc.github.io/Trapped/](https://maoyincc.github.io/Trapped/)
