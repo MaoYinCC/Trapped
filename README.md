@@ -40,3 +40,6 @@ https://maoyincc.github.io/Trapped/
 ## 📜 许可证
 
 本项目采用 MIT 许可证开源，欢迎自由分发与修改。
+
+## 即开即玩：
+https://maoyincc.github.io/Trapped/
