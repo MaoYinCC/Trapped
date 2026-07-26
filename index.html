@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>憋死牛 - Don't Get Trapped</title>
+    <!-- 引入 PeerJS 库用于零成本 P2P 联机 -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #2b2623;
+            --card-bg: rgba(43, 38, 35, 0.85);
+            --board-border: #4a2e1b;
+            --board-surface: #be9265;
+            --line-color: #5c3c1e;
+            --p1-red-top: #ff7676;
+            --p1-red-bottom: #a61c1c;
+            --p2-blue-top: #6db1ff;
+            --p2-blue-bottom: #1c5296;
+            --highlight: #ffd700;
+        }
+
+        body {
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: radial-gradient(circle at center, #3a322d, #1a1512);
+            color: #f0e6d2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            user-select: none;
+        }
+
+        /* 顶部面板 */
+        .header-panel {
+            position: relative;
+            background: var(--card-bg);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            padding: 18px 50px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+            margin-bottom: 25px;
+            text-align: center;
+            backdrop-filter: blur(8px);
+            min-width: 280px;
+        }
+
+        h1 {
+            color: #e6c894;
+            margin: 0 0 8px 0;
+            font-size: 2.2rem;
+            letter-spacing: 2px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.6);
+        }
+
+        #status {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #ff7676;
+            min-height: 1.5rem;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+        }
+
+        /* 棋盘主体外框 */
+        .board-frame {
+            position: relative;
+            padding: 20px;
+            background: linear-gradient(135deg, #5c3a21 0%, #3d2412 50%, #2b170a 100%);
+            border-radius: 28px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.8), 
+                        inset 0 2px 3px rgba(255,255,255,0.2),
+                        inset 0 -3px 5px rgba(0,0,0,0.6);
+        }
+
+        /* 棋盘盘面 */
+        .board-container {
+            position: relative;
+            width: 380px;
+            height: 380px;
+            background: radial-gradient(circle at center, #cdaf87, #aa855c);
+            border-radius: 16px;
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0,0,0,0.5);
+            border: 2px solid #6b4d2f;
+        }
+
+        svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .board-line {
+            stroke: var(--line-color);
+            stroke-width: 4;
+            stroke-linecap: round;
+            filter: drop-shadow(0px 1px 0px rgba(255,255,255,0.2));
+        }
+
+        .forbidden-line {
+            stroke: #d93838;
+            stroke-width: 5;
+            stroke-dasharray: 8, 6;
+            opacity: 0.85;
+            filter: drop-shadow(0 0 3px rgba(217,56,56,0.4));
+        }
+
+        .well-circle {
+            fill: url(#well-gradient);
+            stroke: #3d2412;
+            stroke-width: 3;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));
+        }
+
+        .well-text {
+            fill: #3d2412;
+            font-size: 20px;
+            font-weight: bold;
+            font-family: "KaiTi", "楷体", 'Georgia', serif;
+            text-anchor: middle;
+            dominant-baseline: central;
+        }
+
+        .node {
+            position: absolute;
+            width: 54px;
+            height: 54px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            z-index: 10;
+            transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .piece {
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            transition: all 0.25s ease;
+            position: relative;
+        }
+
+        .piece::after {
+            content: '';
+            position: absolute;
+            top: 5%;
+            left: 15%;
+            width: 70%;
+            height: 35%;
+            border-radius: 50%;
+            background: linear-gradient(to bottom, rgba(255,255,255,0.6), rgba(255,255,255,0));
+        }
+
+        .node.player1 .piece {
+            background: radial-gradient(circle at 35% 35%, var(--p1-red-top), var(--p1-red-bottom));
+            box-shadow: 0 6px 12px rgba(0,0,0,0.5), inset 0 -3px 6px rgba(0,0,0,0.4);
+        }
+
+        .node.player2 .piece {
+            background: radial-gradient(circle at 35% 35%, var(--p2-blue-top), var(--p2-blue-bottom));
+            box-shadow: 0 6px 12px rgba(0,0,0,0.5), inset 0 -3px 6px rgba(0,0,0,0.4);
+        }
+
+        .node.selected .piece {
+            transform: scale(1.18);
+            box-shadow: 0 0 0 4px var(--highlight), 0 10px 20px rgba(0,0,0,0.6);
+        }
+
+        .node.empty.highlight {
+            background: rgba(255, 215, 0, 0.2);
+            border: 3px dashed var(--highlight);
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+            animation: pulse 1.5s infinite alternate;
+        }
+
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.7; }
+            100% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
+        }
+
+        /* 按钮控制区 */
+        .controls {
+            margin-top: 25px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button, select {
+            padding: 12px 18px;
+            font-size: 0.95rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: #f0e6d2;
+            background: linear-gradient(to bottom, #4a382a, #2d2017);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+        }
+
+        button:hover, select:hover {
+            transform: translateY(-2px);
+            background: linear-gradient(to bottom, #5c4736, #3b2b1f);
+            border-color: rgba(212, 175, 55, 0.6);
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        button.active {
+            background: linear-gradient(to bottom, #c68a4c, #8c5a2b);
+            color: #fff;
+            border-color: #ffd700;
+        }
+
+        .btn-reset {
+            background: linear-gradient(to bottom, #a63a3a, #6e2222);
+        }
+        .btn-reset:hover {
+            background: linear-gradient(to bottom, #be4545, #852a2a);
+        }
+
+        .btn-icon {
+            padding: 12px 14px;
+            font-size: 1rem;
+        }
+
+        /* 联机专属先手控制栏 */
+        .online-config-panel {
+            margin-top: 15px;
+            background: rgba(43, 38, 35, 0.9);
+            padding: 8px 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+        }
+        .online-config-panel.hidden {
+            display: none;
+        }
+        .online-config-panel select {
+            padding: 6px 12px;
+            font-size: 0.9rem;
+            background: #221c17;
+        }
+
+        /* 联机房间弹窗样式 */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            backdrop-filter: blur(5px);
+        }
+        .modal-overlay.hidden {
+            display: none;
+        }
+        .modal-card {
+            background: #352c26;
+            border: 1px solid rgba(212, 175, 55, 0.4);
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.8);
+            width: 320px;
+        }
+        .modal-card h2 {
+            color: #e6c894;
+            margin-top: 0;
+            font-size: 1.5rem;
+        }
+        .modal-card input {
+            width: 80%;
+            padding: 10px;
+            font-size: 1.2rem;
+            text-align: center;
+            background: #221c17;
+            border: 1px solid #5c3c1e;
+            color: #f0e6d2;
+            border-radius: 8px;
+            margin: 15px 0;
+            letter-spacing: 4px;
+        }
+        .modal-card .room-code-display {
+            font-size: 2.2rem;
+            color: #ffd700;
+            letter-spacing: 6px;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header-panel">
+        <h1 id="title">憋死牛</h1>
+        <div id="status">你的回合 (红棋)</div>
+    </div>
+
+    <div class="board-frame">
+        <div class="board-container">
+            <svg viewBox="0 0 380 380">
+                <defs>
+                    <radialGradient id="well-gradient" cx="30%" cy="30%" r="70%">
+                        <stop offset="0%" stop-color="#f5e5c9"/>
+                        <stop offset="50%" stop-color="#d4b483"/>
+                        <stop offset="100%" stop-color="#8a6739"/>
+                    </radialGradient>
+                </defs>
+
+                <line x1="60" y1="60" x2="320" y2="60" class="board-line"/>
+                <line x1="60" y1="60" x2="60" y2="320" class="board-line"/>
+                <line x1="60" y1="320" x2="320" y2="320" class="board-line"/>
+
+                <line x1="60" y1="60" x2="320" y2="320" class="board-line"/>
+                <line x1="320" y1="60" x2="60" y2="320" class="board-line"/>
+
+                <line x1="320" y1="60" x2="320" y2="320" class="forbidden-line"/>
+
+                <g transform="translate(260, 190)">
+                    <circle cx="0" cy="0" r="24" class="well-circle"/>
+                    <text x="0" y="0" id="well-text" class="well-text">井</text>
+                </g>
+            </svg>
+
+            <div id="nodes"></div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button id="btn-pve" class="active" onclick="setMode('PvE')">人机对战</button>
+        <button id="btn-pvp" onclick="setMode('PvP')">双人对战</button>
+        <button id="btn-online" onclick="openOnlineModal()">联机对战</button>
+        <button id="btn-reset" class="btn-reset" onclick="resetGame()">重新开始</button>
+        <button id="btn-lang" class="btn-icon" onclick="toggleLanguage()">🌐 EN</button>
+        <button id="btn-sound" class="btn-icon" onclick="toggleSound()">🔊</button>
+    </div>
+
+    <!-- 联网成功后显示的先手选择控制栏 -->
+    <div id="online-config-panel" class="online-config-panel hidden">
+        <span style="font-size: 0.9rem; color:#d4b483;">先手设置：</span>
+        <select id="select-starting-player" onchange="changeStartingPlayer()">
+            <option value="P1">红方先手 (P1)</option>
+            <option value="P2">蓝方先手 (P2)</option>
+        </select>
+        <span id="online-role-tag" style="font-size:0.85rem; color:#ffd700; margin-left: 5px;">(你是房主: 红棋)</span>
+    </div>
+
+    <!-- 联机房间弹窗 -->
+    <div id="online-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <h2 id="modal-title">联机对战</h2>
+            <div id="modal-view-menu">
+                <p style="color:#d4b483; font-size: 0.9rem;">创建房间或输入4位数房间号加入好友</p>
+                <button style="width:100%; margin-bottom:10px;" onclick="createOnlineRoom()">创建房间 (当房主)</button>
+                <div style="margin: 15px 0; border-top: 1px solid #5c3c1e;"></div>
+                <input type="text" id="input-room-code" maxlength="4" placeholder="输入4位数密码">
+                <button style="width:100%; background:linear-gradient(to bottom, #3a6b3a, #203d20);" onclick="joinOnlineRoom()">加入房间</button>
+                <button style="width:100%; margin-top:10px; background:linear-gradient(to bottom, #555, #333);" onclick="closeOnlineModal()">取消</button>
+            </div>
+            <div id="modal-view-waiting" class="hidden">
+                <p>请将下方 4 位数房间号分享给好友：</p>
+                <div id="display-room-code" class="room-code-display">----</div>
+                <p id="waiting-status" style="color:#ffd700;">等待好友加入中...</p>
+                <button style="width:100%; margin-top:15px; background:linear-gradient(to bottom, #a63a3a, #6e2222);" onclick="cancelOnlineRoom()">取消等待</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 语言包配置（默认中文 'zh'）---
+        const i18n = {
+            zh: {
+                title: "憋死牛",
+                wellText: "井",
+                pve: "人机对战",
+                pvp: "双人对战",
+                online: "联机对战",
+                reset: "重新开始",
+                langBtn: "🌐 EN",
+                turnP1PvP: "玩家1回合 (红棋)",
+                turnP2PvP: "玩家2回合 (蓝棋)",
+                turnP1PvE: "你的回合 (红棋)",
+                turnP2PvE: "电脑思考中...",
+                turnOnlineMy: "你的回合",
+                turnOnlinePeer: "对方思考中...",
+                onlineWaiting: "等待对手加入房间...",
+                winP1PvP: "🎉 玩家1胜利！成功憋死对手！",
+                winP2PvP: "🎉 玩家2胜利！成功憋死对手！",
+                winP1PvE: "🎉 恭喜！你成功憋死了电脑！",
+                winP2PvE: "😭 遗憾，你被电脑憋死了！",
+                winOnlineWin: "🎉 恭喜！你赢得了联机对战！",
+                winOnlineLose: "😭 遗憾，你输掉了联机对战！"
+            },
+            en: {
+                title: "Trapped!",
+                wellText: "Well",
+                pve: "vs AI",
+                pvp: "2 Players",
+                online: "Online",
+                reset: "Restart",
+                langBtn: "🌐 中",
+                turnP1PvP: "Player 1's Turn (Red)",
+                turnP2PvP: "Player 2's Turn (Blue)",
+                turnP1PvE: "Your Turn (Red)",
+                turnP2PvE: "AI is thinking...",
+                turnOnlineMy: "Your Turn",
+                turnOnlinePeer: "Opponent's Turn...",
+                onlineWaiting: "Waiting for opponent...",
+                winP1PvP: "🎉 Player 1 Wins! Opponent Trapped!",
+                winP2PvP: "🎉 Player 2 Wins! Opponent Trapped!",
+                winP1PvE: "🎉 Victory! You trapped the AI!",
+                winP2PvE: "😭 Defeat! You were trapped!",
+                winOnlineWin: "🎉 Victory! You won the online match!",
+                winOnlineLose: "😭 Defeat! You lost the online match!"
+            }
+        };
+
+        let currentLang = 'zh';
+
+        function toggleLanguage() {
+            currentLang = currentLang === 'zh' ? 'en' : 'zh';
+            updateStaticText();
+            updateUI();
+        }
+
+        function updateStaticText() {
+            const t = i18n[currentLang];
+            document.getElementById('title').textContent = t.title;
+            document.getElementById('well-text').textContent = t.wellText;
+            document.getElementById('btn-pve').textContent = t.pve;
+            document.getElementById('btn-pvp').textContent = t.pvp;
+            document.getElementById('btn-online').textContent = t.online;
+            document.getElementById('btn-reset').textContent = t.reset;
+            document.getElementById('btn-lang').textContent = t.langBtn;
+        }
+
+        // --- Web Audio 音效系统 ---
+        let audioCtx = null;
+        let soundEnabled = true;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playPlaceSound() {
+            if (!soundEnabled) return;
+            initAudio();
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(280, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.08);
+
+            gain.gain.setValueAtTime(0.6, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.08);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.08);
+        }
+
+        function playSelectSound() {
+            if (!soundEnabled) return;
+            initAudio();
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+
+            gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.05);
+        }
+
+        function playWinSound() {
+            if (!soundEnabled) return;
+            initAudio();
+
+            const notes = [523.25, 659.25, 783.99, 1046.50];
+            notes.forEach((freq, idx) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+
+                osc.type = 'triangle';
+                osc.frequency.value = freq;
+
+                const startTime = audioCtx.currentTime + idx * 0.1;
+                gain.gain.setValueAtTime(0.3, startTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.4);
+
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                osc.start(startTime);
+                osc.stop(startTime + 0.4);
+            });
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            document.getElementById('btn-sound').textContent = soundEnabled ? '🔊' : '🔇';
+        }
+
+        // --- PeerJS 联机核心逻辑 ---
+        let peer = null;
+        let conn = null;
+        let isHost = false;
+        let myOnlineRole = 'P1'; 
+        let startingPlayer = 'P1'; 
+
+        function openOnlineModal() {
+            document.getElementById('online-modal').classList.remove('hidden');
+            document.getElementById('modal-view-menu').classList.remove('hidden');
+            document.getElementById('modal-view-waiting').classList.add('hidden');
+        }
+
+        function closeOnlineModal() {
+            document.getElementById('online-modal').classList.add('hidden');
+            if (peer && !conn) {
+                peer.destroy();
+                peer = null;
+            }
+        }
+
+        function generateRoomCode() {
+            return Math.floor(1000 + Math.random() * 9000).toString();
+        }
+
+        function createOnlineRoom() {
+            const code = generateRoomCode();
+            isHost = true;
+            myOnlineRole = 'P1'; // 房主固定为 P1 (红棋)，加入者为 P2 (蓝棋)
+
+            document.getElementById('modal-view-menu').classList.add('hidden');
+            document.getElementById('modal-view-waiting').classList.remove('hidden');
+            document.getElementById('display-room-code').textContent = code;
+            document.getElementById('waiting-status').textContent = i18n[currentLang].onlineWaiting;
+
+            if (peer) peer.destroy();
+
+            peer = new Peer('trap-bull-' + code);
+
+            peer.on('connection', (connection) => {
+                conn = connection;
+                setupConnection();
+                document.getElementById('online-modal').classList.add('hidden');
+                setMode('Online');
+            });
+
+            peer.on('error', (err) => {
+                alert("房间创建出错或编号重复，请重试: " + err.type);
+                cancelOnlineRoom();
+            });
+        }
+
+        function joinOnlineRoom() {
+            const code = document.getElementById('input-room-code').value.trim();
+            if (code.length !== 4) {
+                alert("请输入正确的 4 位数房间号码");
+                return;
+            }
+            isHost = false;
+            myOnlineRole = 'P2'; // 加入者固定为 P2 (蓝棋)
+
+            if (peer) peer.destroy();
+            peer = new Peer();
+
+            peer.on('open', () => {
+                conn = peer.connect('trap-bull-' + code);
+                setupConnection();
+                document.getElementById('online-modal').classList.add('hidden');
+                setMode('Online');
+            });
+
+            peer.on('error', (err) => {
+                alert("无法连接到房间，请检查房间号是否正确。");
+            });
+        }
+
+        function cancelOnlineRoom() {
+            if (peer) {
+                peer.destroy();
+                peer = null;
+            }
+            document.getElementById('modal-view-waiting').classList.add('hidden');
+            document.getElementById('modal-view-menu').classList.remove('hidden');
+        }
+
+        function setupConnection() {
+            conn.on('data', (data) => {
+                if (data.type === 'updateStartingPlayer') {
+                    startingPlayer = data.startingPlayer;
+                    document.getElementById('select-starting-player').value = startingPlayer;
+                    resetGameVars();
+                    updateUI();
+                } else if (data.type === 'move') {
+                    makeMove(data.from, data.to);
+                    playPlaceSound();
+                    selectedNode = null;
+                    if (!checkGameOver()) {
+                        currentPlayer = currentPlayer === 'P1' ? 'P2' : 'P1';
+                    }
+                    updateUI();
+                } else if (data.type === 'reset') {
+                    resetGameVars();
+                    updateUI();
+                }
+            });
+
+            conn.on('open', () => {
+                // 连接成功，同步当前的先手状态与界面
+                updateOnlineConfigDisplay();
+                resetGameVars();
+                updateUI();
+            });
+
+            conn.on('close', () => {
+                alert("对方已断开连接");
+                setMode('PvE');
+            });
+        }
+
+        function updateOnlineConfigDisplay() {
+            const panel = document.getElementById('online-config-panel');
+            const roleTag = document.getElementById('online-role-tag');
+            if (gameMode === 'Online') {
+                panel.classList.remove('hidden');
+                if (isHost) {
+                    roleTag.textContent = "(你是房主: 红棋)";
+                } else {
+                    roleTag.textContent = "(你是加入者: 蓝棋)";
+                }
+            } else {
+                panel.classList.add('hidden');
+            }
+        }
+
+        function changeStartingPlayer() {
+            const val = document.getElementById('select-starting-player').value;
+            startingPlayer = val;
+            resetGameVars();
+            updateUI();
+
+            if (gameMode === 'Online' && conn && conn.open) {
+                conn.send({ type: 'updateStartingPlayer', startingPlayer: startingPlayer });
+            }
+        }
+
+        // --- 游戏主逻辑 ---
+        const positions = [
+            { id: 0, x: 60,  y: 60 },
+            { id: 1, x: 320, y: 60 },
+            { id: 2, x: 60,  y: 320 },
+            { id: 3, x: 320, y: 320 },
+            { id: 4, x: 190, y: 190 },
+        ];
+
+        const adjacency = {
+            0: [1, 2, 4],
+            1: [0, 4],
+            2: [0, 3, 4],
+            3: [2, 4],
+            4: [0, 1, 2, 3],
+        };
+
+        let board = ['P1', 'P1', 'P2', 'P2', null];
+        let currentPlayer = 'P1';
+        let selectedNode = null;
+        let isGameOver = false;
+        let gameMode = 'PvE'; 
+
+        function initBoard() {
+            const container = document.getElementById('nodes');
+            container.innerHTML = '';
+            
+            positions.forEach(pos => {
+                const el = document.createElement('div');
+                el.id = `node-${pos.id}`;
+                el.className = 'node';
+                el.style.left = `${pos.x}px`;
+                el.style.top = `${pos.y}px`;
+                el.onclick = () => handleNodeClick(pos.id);
+                
+                const piece = document.createElement('div');
+                piece.className = 'piece';
+                el.appendChild(piece);
+                
+                container.appendChild(el);
+            });
+
+            updateStaticText();
+            updateUI();
+        }
+
+        function updateUI() {
+            positions.forEach(pos => {
+                const el = document.getElementById(`node-${pos.id}`);
+                const state = board[pos.id];
+
+                el.classList.remove('player1', 'player2', 'empty', 'selected', 'highlight');
+
+                if (state === 'P1') el.classList.add('player1');
+                else if (state === 'P2') el.classList.add('player2');
+                else el.classList.add('empty');
+
+                if (selectedNode === pos.id) el.classList.add('selected');
+
+                if (selectedNode !== null && state === null && adjacency[selectedNode].includes(pos.id)) {
+                    el.classList.add('highlight');
+                }
+            });
+
+            const statusEl = document.getElementById('status');
+            const t = i18n[currentLang];
+
+            if (!isGameOver) {
+                if (gameMode === 'PvP') {
+                    if (currentPlayer === 'P1') {
+                        statusEl.textContent = t.turnP1PvP;
+                        statusEl.style.color = "#ff7676";
+                    } else {
+                        statusEl.textContent = t.turnP2PvP;
+                        statusEl.style.color = "#6db1ff";
+                    }
+                } else if (gameMode === 'Online') {
+                    if (currentPlayer === myOnlineRole) {
+                        statusEl.textContent = `${t.turnOnlineMy} (${myOnlineRole === 'P1' ? '红棋' : '蓝棋'})`;
+                        statusEl.style.color = myOnlineRole === 'P1' ? "#ff7676" : "#6db1ff";
+                    } else {
+                        statusEl.textContent = t.turnOnlinePeer;
+                        statusEl.style.color = "#a0a0a0";
+                    }
+                } else {
+                    if (currentPlayer === 'P1') {
+                        statusEl.textContent = t.turnP1PvE;
+                        statusEl.style.color = "#ff7676";
+                    } else {
+                        statusEl.textContent = t.turnP2PvE;
+                        statusEl.style.color = "#6db1ff";
+                    }
+                }
+            } else {
+                const winner = currentPlayer;
+                if (gameMode === 'PvP') {
+                    statusEl.textContent = winner === 'P1' ? t.winP1PvP : t.winP2PvP;
+                } else if (gameMode === 'Online') {
+                    statusEl.textContent = (winner === myOnlineRole) ? t.winOnlineWin : t.winOnlineLose;
+                } else {
+                    statusEl.textContent = winner === 'P1' ? t.winP1PvE : t.winP2PvE;
+                }
+                statusEl.style.color = "#ffd700";
+            }
+        }
+
+        function handleNodeClick(id) {
+            if (isGameOver) return;
+            if (gameMode === 'PvE' && currentPlayer === 'P2') return;
+            if (gameMode === 'Online' && currentPlayer !== myOnlineRole) return;
+
+            const clickedPiece = board[id];
+
+            if (clickedPiece === currentPlayer) {
+                selectedNode = id;
+                playSelectSound();
+                updateUI();
+                return;
+            }
+
+            if (selectedNode !== null && clickedPiece === null && adjacency[selectedNode].includes(id)) {
+                const moveData = { from: selectedNode, to: id };
+                makeMove(selectedNode, id);
+                playPlaceSound();
+                selectedNode = id = null;
+
+                if (gameMode === 'Online' && conn && conn.open) {
+                    conn.send({ type: 'move', from: moveData.from, to: moveData.to });
+                }
+                
+                if (!checkGameOver()) {
+                    switchTurn();
+                }
+            }
+        }
+
+        function makeMove(from, to) {
+            board[to] = board[from];
+            board[from] = null;
+        }
+
+        function getValidMoves(player) {
+            const moves = [];
+            for (let i = 0; i < 5; i++) {
+                if (board[i] === player) {
+                    for (let target of adjacency[i]) {
+                        if (board[target] === null) {
+                            moves.push({ from: i, to: target });
+                        }
+                    }
+                }
+            }
+            return moves;
+        }
+
+        function switchTurn() {
+            currentPlayer = currentPlayer === 'P1' ? 'P2' : 'P1';
+            updateUI();
+
+            if (gameMode === 'PvE' && currentPlayer === 'P2') {
+                setTimeout(aiTurn, 600);
+            }
+        }
+
+        function checkGameOver() {
+            const nextPlayer = currentPlayer === 'P1' ? 'P2' : 'P1';
+            const nextMoves = getValidMoves(nextPlayer);
+            if (nextMoves.length === 0) {
+                isGameOver = true;
+                playWinSound();
+                updateUI();
+                return true;
+            }
+            return false;
+        }
+
+        function aiTurn() {
+            if (isGameOver) return;
+
+            const moves = getValidMoves('P2');
+            if (moves.length > 0) {
+                const move = moves[Math.floor(Math.random() * moves.length)];
+                makeMove(move.from, move.to);
+                playPlaceSound();
+            }
+
+            if (!checkGameOver()) {
+                switchTurn();
+            }
+        }
+
+        function setMode(mode) {
+            gameMode = mode;
+            document.getElementById('btn-pve').classList.toggle('active', mode === 'PvE');
+            document.getElementById('btn-pvp').classList.toggle('active', mode === 'PvP');
+            document.getElementById('btn-online').classList.toggle('active', mode === 'Online');
+            
+            if (mode !== 'Online' && peer && !conn) {
+                peer.destroy();
+                peer = null;
+            }
+            
+            updateOnlineConfigDisplay();
+            resetGame();
+        }
+
+        function resetGameVars() {
+            board = ['P1', 'P1', 'P2', 'P2', null];
+            currentPlayer = startingPlayer;
+            selectedNode = null;
+            isGameOver = false;
+        }
+
+        function resetGame() {
+            resetGameVars();
+            if (gameMode === 'Online' && conn && conn.open) {
+                conn.send({ type: 'reset' });
+            }
+            initBoard();
+        }
+
+        initBoard();
+    </script>
+</body>
+</html>
